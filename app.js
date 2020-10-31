@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
 
 const bodyparser = require("body-parser");
 
+const encrypt = require('mongoose-encryption');
+
 //-----------------------------------------------------------------------------
 
 //setting up all the dependinces
@@ -24,12 +26,19 @@ mongoose.connect("mongodb://localhost:27017/userDB",{useNewUrlParser:true})
 
 // Creating a new schema for user input
 
-const userSchema = {
+const userSchema = new mongoose.Schema({
     email: String,
     password: String
-};
+});
+
+// created a encryption setup through mongoose
+var secret = "Thisisournewmongooseschemahahaha";
+userSchema.plugin(encrypt, { secret: secret , encryptedFields:["password"] });
 
 const User = new mongoose.model("User", userSchema);
+
+//--------------------------------------------------------------------------
+
 
 // Rendering somepages 
 

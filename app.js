@@ -1,5 +1,5 @@
 // requiring all dependinces
-require('dotenv').config()
+require("dotenv").config();
 
 const express = require("express");
 
@@ -9,9 +9,12 @@ const mongoose = require("mongoose");
 
 const bodyparser = require("body-parser");
 
-const md5 = require('md5');
+const session = require("express-session");
 
-const bcrypt = require ('bcrypt');
+const passpotLocalMongoose = require("passport-local-mongoose");
+
+const passport = require("passport");
+const e = require("express");
 //-----------------------------------------------------------------------------
 
 //setting up all the dependinces
@@ -22,14 +25,20 @@ app.set("view engine", "ejs");
 app.use(bodyparser.urlencoded({ extended: true }));
 
 //------------------------------------------------------------------------------
+app.use(
+  session({
+    secret: "Our little secret.",
+    resave: false,
+    saveUninitialized: false,
+  })
+);
 
-
-const saltRounds = 10;
-
+app.use(passport.initialize());
+app.use(passport.session());
 
 // connecting mongoose and linking to local database
 mongoose.connect("mongodb://localhost:27017/userDB", { useNewUrlParser: true });
-
+mongoose.set("useCreateIndex", true);
 // Creating a new schema for user input
 
 const userSchema = new mongoose.Schema({
@@ -37,10 +46,16 @@ const userSchema = new mongoose.Schema({
   password: String,
 });
 
+userSchema.plugin(passpotLocalMongoose);
+
 // created a encryption setup through mongoose
 
 const User = new mongoose.model("User", userSchema);
 
+passport.use(User.createStrategy());
+
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 //--------------------------------------------------------------------------
 
 // Rendering somepages
@@ -53,64 +68,67 @@ app.get("/login", function (req, res) {
   res.render("login");
 });
 
+app.get("/secrets", function (req, res) {
+  if (req.isAuthenticated()) {
+    res.render("secrets");
+  } else {
+    res.redirect("/login");
+  }
+});
+
 app.get("/register", function (req, res) {
   res.render("register");
 });
 
-app.get("/submit", function(req,res){
-    res.render("submit")
+app.get("/submit", function (req, res) {
+  res.render("submit");
+});
+
+app.get("/logout", function(req,res){
+  req.logout();
+  res.redirect("/");
 })
 //---------------------------------------------------------------------
 
 // Post method for register page to store user data
 
 app.post("/register", function (req, res) {
-
-  bcrypt.genSalt(saltRounds, function(err, salt) {
-    bcrypt.hash(req.body.password, salt, function(err, hash) {
-      const newUser = new User({
-        email: req.body.username,
-        password: hash,
+  User.register({ username: req.body.username }, req.body.password, function (err, user) {
+    if (err) {
+      console.log(err);
+      res.redirect("/register");
+    } else {
+      passport.authenticate("local")(req, res, function () {
+        res.redirect("/secrets");
       });
-    
-      newUser.save(function (err) {
-        if (!err) {
-          res.render("secrets");
-        } else {
-          console.log(err);
-        }
-      });
-    });
-    });
+    }
+  });
 });
-
 
 //------------------------------------------------------------------------------
 
 //post method for loginging users
 app.post("/login", function (req, res) {
-  const username = req.body.username;
-  const password = req.body.password;
-
-  User.findOne({ email: username }, function (err, founduser) {
-    if (err) {
-      console.log(err);
-    } else {
-      if (founduser) {
-          bcrypt.compare(password, founduser.password, function(err, result) {
-           if(result === true){
-            res.render("secrets");
-           }
-        });
-          
-        
-      }
-    }
+  const user = new User({
+    username: req.body.username,
+    password: req.body.password
   });
+
+  req.login(user, function(err){
+    if(err){
+      console.log(err);
+    }
+    else{
+      passport.authenticate("local")(req, res, function(){
+        res.redirect("/secrets");
+      })
+    }
+  })
+
 });
 
 //------------------------------------------------------------------
 
-app.listen(8000, function (req, res) {
+app.listen(3000, function (req, res) {
   console.log("server started sucessfully");
 });
